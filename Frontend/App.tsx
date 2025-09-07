@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import React, { useState } from 'react';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { LanguageProvider, useLanguage, languages } from './contexts/LanguageContext';
 import SoilAnalysis from './components/SoilAnalysis';
