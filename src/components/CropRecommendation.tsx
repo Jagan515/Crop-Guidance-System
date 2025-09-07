@@ -16,6 +16,7 @@ import {
   Sprout,
   AlertCircle
 } from 'lucide-react';
+import Footer from './Footer';
 
 interface CropData {
   id: string;
@@ -169,31 +170,47 @@ const CropRecommendation: React.FC<{ onBack: () => void }> = ({ onBack }) => {
     setError(null);
     
     try {
-      const response = await fetch('http://localhost:5000/predict', {
+      const response = await fetch('http://localhost:5000/api/predict', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify(environmentalData)
+        body: JSON.stringify({
+          nitrogen: environmentalData.nitrogen,
+          phosphorus: environmentalData.phosphorus,
+          potassium: environmentalData.potassium,
+          temperature: environmentalData.temperature,
+          humidity: environmentalData.humidity,
+          ph: environmentalData.ph,
+          rainfall: environmentalData.rainfall
+        })
       });
 
       if (!response.ok) {
         throw new Error('Failed to fetch recommendations');
       }
 
-      const data: ApiResponse = await response.json();
+      const data = await response.json() as any;
       
-      // Use API recommendations if available, otherwise use mock data
-      if (data.recommendations && data.recommendations.length > 0) {
-        setCrops(data.recommendations);
+      // Map backend result to our card list: prefer similar_crops + primary prediction
+      const primaryName: string | undefined = data?.crop?.name || data?.prediction;
+      const names: string[] = [
+        ...(primaryName ? [primaryName] : []),
+        ...(Array.isArray(data?.similar_crops) ? data.similar_crops : [])
+      ];
+
+      const nameSet = new Set(names.map((n: string) => (n || '').toLowerCase()));
+      const matched = mockCrops.filter(c => nameSet.has(c.name.toLowerCase()));
+
+      if (matched.length > 0) {
+        setCrops(matched);
       } else {
-        // Filter mock crops based on environmental conditions
+        // fallback to environment-based mock filter
         const suitableCrops = mockCrops.filter(crop => {
-          // Simple logic to filter based on conditions
           if (environmentalData.rainfall > 150 && crop.waterRequirement === 'high') return true;
           if (environmentalData.rainfall < 100 && crop.waterRequirement === 'low') return true;
           if (environmentalData.rainfall >= 100 && environmentalData.rainfall <= 150 && crop.waterRequirement === 'medium') return true;
-          return Math.random() > 0.3; // Random selection for demo
+          return Math.random() > 0.3;
         });
         setCrops(suitableCrops.length > 0 ? suitableCrops : mockCrops);
       }
@@ -518,6 +535,7 @@ const CropRecommendation: React.FC<{ onBack: () => void }> = ({ onBack }) => {
           </div>
         )}
       </div>
+      <Footer />
     </div>
   );
 };

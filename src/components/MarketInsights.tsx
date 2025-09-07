@@ -18,6 +18,7 @@ import {
   Award,
   AlertCircle
 } from 'lucide-react';
+import Footer from './Footer';
 
 interface MarketData {
   id: string;
@@ -602,6 +603,7 @@ const MarketInsights: React.FC<{ onBack: () => void }> = ({ onBack }) => {
           </div>
         )}
       </div>
+      <Footer />
     </div>
   );
 };

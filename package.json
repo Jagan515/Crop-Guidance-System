@@ -1,15 +1,26 @@
 {
-  "name": "vite-react-typescript-starter",
+  "name": "cropwise-app",
   "private": true,
-  "version": "0.0.0",
+  "version": "1.0.0",
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "vite build",
-    "lint": "eslint .",
-    "preview": "vite preview"
+    "dev:host": "vite --host 0.0.0.0",
+    "dev:ngrok": "vite --host 0.0.0.0 --port 5173",
+    "build": "tsc && vite build",
+    "build:dev": "vite build --mode development",
+    "build:prod": "vite build --mode production",
+    "lint": "eslint . --ext ts,tsx --report-unused-disable-directives --max-warnings 0",
+    "lint:fix": "eslint . --ext ts,tsx --fix",
+    "preview": "vite preview",
+    "preview:host": "vite preview --host 0.0.0.0",
+    "type-check": "tsc --noEmit",
+    "firebase:init": "firebase init",
+    "firebase:deploy": "npm run build && firebase deploy",
+    "firebase:serve": "npm run build && firebase serve"
   },
   "dependencies": {
+    "firebase": "^10.7.1",
     "lucide-react": "^0.344.0",
     "react": "^18.3.1",
     "react-dom": "^18.3.1"

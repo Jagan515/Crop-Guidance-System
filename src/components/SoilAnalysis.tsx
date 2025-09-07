@@ -12,6 +12,7 @@ import {
   Info,
   Thermometer
 } from 'lucide-react';
+import Footer from './Footer';
 
 interface SoilData {
   ph: number;
@@ -351,6 +352,7 @@ const SoilAnalysis: React.FC<{ onBack: () => void }> = ({ onBack }) => {
           </div>
         </div>
       </div>
+      <Footer />
     </div>
   );
 };

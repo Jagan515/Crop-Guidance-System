@@ -14,6 +14,7 @@ import {
   MapPin,
   RefreshCw
 } from 'lucide-react';
+import Footer from './Footer';
 
 interface WeatherData {
   current: {
@@ -316,6 +317,7 @@ const WeatherForecast: React.FC<{ onBack: () => void }> = ({ onBack }) => {
           </div>
         </div>
       </div>
+      <Footer />
     </div>
   );
 };
