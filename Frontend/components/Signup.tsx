@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
-import { useAuth, FarmerProfile } from '../contexts/AuthContext';
-import { useLanguage, languages } from '../contexts/LanguageContext';
+import { useAuth, FarmerProfile } from '../../backend/contexts/AuthContext';
+import { useLanguage, languages } from '../../backend/contexts/LanguageContext';
 import { 
   User, 
   Mail, 

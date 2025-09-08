@@ -14,7 +14,7 @@ import {
     serverTimestamp
   } from 'firebase/firestore';
   import { ref, uploadBytes, getDownloadURL, deleteObject } from 'firebase/storage';
-  import { db, storage } from '../firebase/config';
+  import { db, storage } from '../../backend/firebase/config';
   
   // Interfaces
   export interface SoilTestRecord {

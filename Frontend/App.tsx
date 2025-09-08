@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
-import { AuthProvider, useAuth } from './contexts/AuthContext';
-import { LanguageProvider, useLanguage, languages } from './contexts/LanguageContext';
+import { AuthProvider, useAuth } from '../backend/contexts/AuthContext';
+import { LanguageProvider, useLanguage, languages } from '../backend/contexts/LanguageContext';
 import SoilAnalysis from './components/SoilAnalysis';
 import WeatherForecast from './components/WeatherForecast';
 import CropRecommendation from './components/CropRecommendation';

@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { useAuth } from '../contexts/AuthContext';
-import { useLanguage, languages } from '../contexts/LanguageContext';
+import { useAuth } from '../../backend/contexts/AuthContext';
+import { useLanguage, languages } from '../../backend/contexts/LanguageContext';
 import { 
   User,
   Settings,
