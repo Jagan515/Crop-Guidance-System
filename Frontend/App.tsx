@@ -30,6 +30,7 @@ import {
   CheckCircle,
   Activity
 } from 'lucide-react';
+import { useTranslation } from "react-i18next";
 
 function AppContent() {
   const { currentUser, farmerProfile, loading } = useAuth();
