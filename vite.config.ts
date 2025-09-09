@@ -12,7 +12,7 @@ export default defineConfig({
     allowedHosts: [
       'localhost',
       '127.0.0.1',
-      '6bbcbc06a613.ngrok-free.app', // Your ngrok domain
+      '13003aa8c968.ngrok-free.app', // Your ngrok domain
     ],
     
     // Proxy configuration for external APIs (crop recommendation service, weather APIs, etc.)
