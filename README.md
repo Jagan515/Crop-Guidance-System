@@ -26,7 +26,6 @@ A comprehensive farming application with AI-powered crop recommendations, market
 ### 1. Machine Learning
 ```bash
 cd Machine Learning
-cd backend
 pip install -r requirements.txt
 python app.py
 ```
