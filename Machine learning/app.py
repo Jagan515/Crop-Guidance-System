@@ -3,90 +3,80 @@ from flask_cors import CORS
 import numpy as np
 import pickle
 import os
-import pandas as pd
-import requests
 
 # Flask app initialization
 app = Flask(__name__)
 CORS(app)
 
 # Model paths
-MODEL_PATH = "models/model.pkl"
-SCALER_PATH = "models/standscaler.pkl"
-MINMAX_PATH = "models/minmaxscaler.pkl"
+RF_MODEL_PATH = "models/rf_model.pkl"
+XGB_MODEL_PATH = "models/xgb_model.pkl"
+SCALER_PATH = "models/scaler.pkl"
+ENCODER_PATH = "models/label_encoder.pkl"
 
 # Check if required files exist
-USE_MOCK = not all(os.path.exists(f) for f in [MODEL_PATH, SCALER_PATH, MINMAX_PATH])
+USE_MOCK = not all(os.path.exists(f) for f in [RF_MODEL_PATH, XGB_MODEL_PATH, SCALER_PATH, ENCODER_PATH])
 
-# Load model and scalers if available
-model, sc, ms, df = None, None, None, None
+# Load models, scaler, and encoder if available
+rf_model, xgb_model, scaler, encoder = None, None, None, None
 if not USE_MOCK:
-    model = pickle.load(open(MODEL_PATH, "rb"))
-    sc = pickle.load(open(SCALER_PATH, "rb"))
-    ms = pickle.load(open(MINMAX_PATH, "rb"))
-    df_path = "Crop_recommendation.csv"
-    if os.path.exists(df_path):
-        df = pd.read_csv(df_path)
-    else:
+    try:
+        rf_model = pickle.load(open(RF_MODEL_PATH, "rb"))
+        xgb_model = pickle.load(open(XGB_MODEL_PATH, "rb"))
+        scaler = pickle.load(open(SCALER_PATH, "rb"))
+        encoder = pickle.load(open(ENCODER_PATH, "rb"))
+    except Exception as e:
+        print(f"Error loading model/scaler/encoder: {e}")
         USE_MOCK = True
+
 
 @app.route("/", methods=["GET"])
 def home():
     return jsonify({"status": "ok", "service": "crop-prediction-api"})
 
+
 @app.route("/api/predict", methods=["POST"])
 def api_predict():
     try:
+        if USE_MOCK:
+            return jsonify({"error": "Models not found. Please train and save models first."}), 500
+
         data = request.get_json(force=True)
 
-        N = float(data.get("nitrogen"))
-        P = float(data.get("phosphorus"))
-        K = float(data.get("potassium"))
-        temp = float(data.get("temperature"))
-        humidity = float(data.get("humidity"))
-        ph = float(data.get("ph"))
-        rainfall = float(data.get("rainfall"))
+        # Required fields
+        required_fields = ["nitrogen", "phosphorus", "potassium", "temperature", "humidity", "ph", "rainfall"]
+        for field in required_fields:
+            if field not in data:
+                return jsonify({"error": f"Missing field: {field}"}), 400
+
+        # Extract features
+        N = float(data["nitrogen"])
+        P = float(data["phosphorus"])
+        K = float(data["potassium"])
+        temp = float(data["temperature"])
+        humidity = float(data["humidity"])
+        ph = float(data["ph"])
+        rainfall = float(data["rainfall"])
 
         features = np.array([N, P, K, temp, humidity, ph, rainfall]).reshape(1, -1)
 
-        if not USE_MOCK and model and sc and ms and df is not None:
-            scaled = ms.transform(features)
-            final = sc.transform(scaled)
-            prediction_idx = model.predict(final)[0]
-            unique_crops = df["label"].unique()
-            if prediction_idx < len(unique_crops):
-                predicted_crop = unique_crops[prediction_idx]
-            else:
-                predicted_crop = "Unknown"
+        # Scale input
+        final = scaler.transform(features)
+
+        # Choose model (default = RF)
+        model_choice = data.get("model", "rf").lower()
+        if model_choice == "xgb":
+            prediction_idx = xgb_model.predict(final)[0]
         else:
-            # Simple fallback rules
-            if rainfall >= 150 and humidity >= 70:
-                predicted_crop = "Rice"
-            elif 18 <= temp <= 26 and 6.0 <= ph <= 7.5:
-                predicted_crop = "Chickpea"
-            elif temp >= 24 and rainfall >= 100:
-                predicted_crop = "Maize"
-            else:
-                predicted_crop = "Mungbean"
+            prediction_idx = rf_model.predict(final)[0]
+
+        predicted_crop = encoder.inverse_transform([prediction_idx])[0]
 
         return jsonify({"prediction": predicted_crop})
 
     except Exception as e:
         return jsonify({"error": str(e)}), 400
 
-@app.route("/get_weather", methods=["POST"])
-def get_weather():
-    try:
-        lat = request.json.get("lat")
-        lon = request.json.get("lon")
-        api_key = "YOUR_OPENWEATHERMAP_API_KEY"  # Replace with env var in production
-
-        url = f"http://api.openweathermap.org/data/2.5/weather?lat={lat}&lon={lon}&appid={api_key}&units=metric"
-        response = requests.get(url)
-        return jsonify(response.json())
-
-    except Exception as e:
-        return jsonify({"error": str(e)}), 500
 
 if __name__ == "__main__":
     app.run(debug=True)
