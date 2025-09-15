@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { useAuth } from '../../backend/contexts/AuthContext';
-import { useLanguage, languages } from '../../backend/contexts/LanguageContext';
+import { useAuth } from '../contexts/AuthContext';
+import { useLanguage, languages } from '../contexts/LanguageContext';
 import { 
   User,
   Settings,
@@ -343,7 +343,7 @@ const UserDashboard: React.FC = () => {
                 )}
               </div>
 
-              <div>
+              {/* <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Units</label>
                 {isEditing ? (
                   <select
@@ -360,7 +360,7 @@ const UserDashboard: React.FC = () => {
                 ) : (
                   <p className="text-gray-900 capitalize">{farmerProfile.preferences.units}</p>
                 )}
-              </div>
+              </div> */}
 
               <div>
                 <label className="flex items-center space-x-2">
@@ -422,7 +422,7 @@ const UserDashboard: React.FC = () => {
         )}
 
         {/* Quick Stats */}
-        <div className="bg-white rounded-xl shadow-lg p-6 mt-6">
+        {/* <div className="bg-white rounded-xl shadow-lg p-6 mt-6">
           <h2 className="text-xl font-semibold text-gray-900 mb-6">Quick Stats</h2>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <div className="text-center p-4 bg-green-50 rounded-lg">
@@ -442,6 +442,7 @@ const UserDashboard: React.FC = () => {
             </div>
           </div>
         </div>
+      </div> */}
       </div>
     </div>
   );

@@ -1,4 +1,6 @@
 import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { useAuth } from '../contexts/AuthContext';
 import { 
   ArrowLeft, 
   Sun, 
@@ -12,7 +14,8 @@ import {
   Eye,
   AlertTriangle,
   MapPin,
-  RefreshCw
+  RefreshCw,
+  Moon
 } from 'lucide-react';
 import Footer from './Footer';
 
@@ -22,8 +25,8 @@ interface WeatherData {
     condition: string;
     icon: string;
     humidity: number;
-    windSpeed: number;
-    visibility: number;
+    windSpeed: number; // in km/h
+    visibility: number; // in km
     feelsLike: number;
   };
   forecast: Array<{
@@ -33,7 +36,7 @@ interface WeatherData {
     low: number;
     condition: string;
     icon: string;
-    rainfall: number;
+    rainfall: number; // in mm
     humidity: number;
   }>;
   alerts: Array<{
@@ -45,6 +48,29 @@ interface WeatherData {
   location: string;
 }
 
+// Helper function to map OpenWeatherMap icon codes to our icons
+
+
+
+const getWeatherIcon = (id: number, iconCode: string): string => {
+  // Check for thunderstorm
+  if (id >= 200 && id < 300) return 'thunderstorm';
+  // Check for drizzle
+  if (id >= 300 && id < 400) return 'rainy';
+  // Check for rain
+  if (id >= 500 && id < 600) return 'rainy';
+  // Check for snow
+  if (id >= 600 && id < 700) return 'snow';
+  // Check for atmosphere (mist, fog, etc.)
+  if (id >= 700 && id < 800) return 'fog';
+  // Check for clear sky
+  if (id === 800) return iconCode.includes('n') ? 'moon' : 'sunny';
+  // Check for clouds
+  if (id > 800) return 'cloudy';
+  
+  return 'sunny';
+};
+
 const WeatherIcon: React.FC<{ condition: string; size?: number }> = ({ condition, size = 24 }) => {
   const iconProps = { size, className: "text-current" };
   
@@ -52,65 +78,174 @@ const WeatherIcon: React.FC<{ condition: string; size?: number }> = ({ condition
     case 'sunny':
     case 'clear':
       return <Sun {...iconProps} className="text-yellow-500" />;
+    case 'moon':
+      return <Moon {...iconProps} className="text-gray-600" />;
     case 'cloudy':
     case 'overcast':
-      return <Cloud {...iconProps} className="text-gray-500" />;
+    case 'clouds':
+      return <Cloud {...iconProps} className="text-gray-400" />;
     case 'rainy':
     case 'rain':
-      return <CloudRain {...iconProps} className="text-blue-500" />;
+    case 'drizzle':
+      return <CloudRain {...iconProps} className="text-blue-400" />;
     case 'snow':
-      return <CloudSnow {...iconProps} className="text-blue-300" />;
+      return <CloudSnow {...iconProps} className="text-blue-200" />;
     case 'thunderstorm':
-      return <Zap {...iconProps} className="text-purple-500" />;
+      return <Zap {...iconProps} className="text-yellow-400" />;
+    case 'windy':
+      return <Wind {...iconProps} className="text-gray-400" />;
+    case 'fog':
+    case 'mist':
+    case 'haze':
+      return <Droplets {...iconProps} className="text-gray-300" />;
     default:
       return <Sun {...iconProps} className="text-yellow-500" />;
   }
 };
 
-const WeatherForecast: React.FC<{ onBack: () => void }> = ({ onBack }) => {
+const WeatherForecast: React.FC<{ onBack?: () => void }> = ({ onBack }) => {
+  const navigate = useNavigate();
+  const { farmerProfile } = useAuth();
   const [weatherData, setWeatherData] = useState<WeatherData | null>(null);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [lastUpdated, setLastUpdated] = useState(new Date());
 
-  // Mock weather data (in real app, this would fetch from OpenWeatherMap API)
+  // Fetch weather data from OpenWeatherMap API
   useEffect(() => {
-    const fetchWeatherData = () => {
-      // Simulate API call delay
-      setTimeout(() => {
-        const mockData: WeatherData = {
-          current: {
-            temp: 28,
-            condition: 'Sunny',
-            icon: 'sunny',
-            humidity: 65,
-            windSpeed: 12,
-            visibility: 10,
-            feelsLike: 32
-          },
-          forecast: [
-            { date: '2025-01-27', day: 'Today', high: 28, low: 18, condition: 'Sunny', icon: 'sunny', rainfall: 0, humidity: 65 },
-            { date: '2025-01-28', day: 'Tue', high: 30, low: 20, condition: 'Cloudy', icon: 'cloudy', rainfall: 0, humidity: 70 },
-            { date: '2025-01-29', day: 'Wed', high: 26, low: 16, condition: 'Rainy', icon: 'rainy', rainfall: 15, humidity: 85 },
-            { date: '2025-01-30', day: 'Thu', high: 24, low: 14, condition: 'Rainy', icon: 'rainy', rainfall: 25, humidity: 90 },
-            { date: '2025-01-31', day: 'Fri', high: 27, low: 17, condition: 'Cloudy', icon: 'cloudy', rainfall: 5, humidity: 75 },
-            { date: '2025-02-01', day: 'Sat', high: 29, low: 19, condition: 'Sunny', icon: 'sunny', rainfall: 0, humidity: 60 },
-            { date: '2025-02-02', day: 'Sun', high: 31, low: 21, condition: 'Sunny', icon: 'sunny', rainfall: 0, humidity: 55 }
-          ],
-          alerts: [
-            {
-              type: 'warning',
-              title: 'Heavy Rainfall Expected',
-              description: 'Heavy rain expected Wednesday-Thursday. Consider postponing field activities and ensure proper drainage.',
-              severity: 'medium'
-            }
-          ],
-          location: 'Bangalore, Karnataka'
-        };
+    const fetchWeatherData = async () => {
+      try {
+        setLoading(true);
+        setError(null);
         
-        setWeatherData(mockData);
+        console.log('Farmer profile:', farmerProfile);
+        
+        if (!farmerProfile) {
+          console.log('No user profile found');
+          setError('Please sign in to see weather for your location');
+          setLoading(false);
+          return;
+        }
+        
+        // Check if coordinates exist in profile
+        if (!farmerProfile.farmLocation?.coordinates) {
+          console.log('No coordinates found in profile');
+          setError('No location data found in your profile. Please update your farm location.');
+          setLoading(false);
+          return;
+        }
+        
+        // Use the coordinates from the user's profile
+        const { latitude, longitude } = farmerProfile.farmLocation.coordinates;
+
+
+
+        
+        // Validate coordinates
+        if (typeof latitude !== 'number' || typeof longitude !== 'number' || 
+            isNaN(latitude) || isNaN(longitude) ||
+            latitude < -90 || latitude > 90 ||
+            longitude < -180 || longitude > 180) {
+          console.error('Invalid coordinates:', { latitude, longitude });
+          setError('Invalid location data in your profile. Please update your farm location.');
+          setLoading(false);
+          return;
+        }
+        
+        const lat = latitude;
+        const lon = longitude;
+
+
+        console.log('Using user location from profile:', lat, lon);
+        
+        const apiKey = import.meta.env.VITE_OPENWEATHER_API_KEY;
+        if (!apiKey) {
+          throw new Error('OpenWeatherMap API key is not configured');
+        }
+        
+        // Fetch current weather and forecast
+        const currentUrl = `https://api.openweathermap.org/data/2.5/weather?lat=${lat}&lon=${lon}&appid=${apiKey}&units=metric`;
+        const forecastUrl = `https://api.openweathermap.org/data/2.5/forecast?lat=${lat}&lon=${lon}&appid=${apiKey}&units=metric`;
+        
+        console.log('Fetching weather from:', currentUrl);
+        console.log('Fetching forecast from:', forecastUrl);
+        
+        const [currentRes, forecastRes] = await Promise.all([
+          fetch(currentUrl),
+          fetch(forecastUrl)
+        ]);
+
+        console.log('Current response status:', currentRes.status, currentRes.statusText);
+        console.log('Forecast response status:', forecastRes.status, forecastRes.statusText);
+
+        if (!currentRes.ok) {
+          const errorText = await currentRes.text();
+          console.error('Current weather API error:', errorText);
+          throw new Error(`Failed to fetch current weather: ${currentRes.status} ${currentRes.statusText}`);
+        }
+        
+        if (!forecastRes.ok) {
+          const errorText = await forecastRes.text();
+          console.error('Forecast API error:', errorText);
+          throw new Error(`Failed to fetch forecast: ${forecastRes.status} ${forecastRes.statusText}`);
+        }
+
+        const currentData = await currentRes.json();
+        const forecastData = await forecastRes.json();
+
+        // Process current weather
+        const currentWeather = {
+          temp: Math.round(currentData.main.temp),
+          condition: currentData.weather[0].main,
+          icon: getWeatherIcon(currentData.weather[0].id, currentData.weather[0].icon),
+          humidity: currentData.main.humidity,
+          windSpeed: Math.round(currentData.wind.speed * 3.6), // Convert m/s to km/h
+          visibility: currentData.visibility / 1000, // Convert meters to km
+          feelsLike: Math.round(currentData.main.feels_like)
+        };
+
+        // Process forecast (group by day)
+        const dailyForecast = forecastData.list.reduce((acc: any[], item: any) => {
+          const date = new Date(item.dt * 1000);
+          const dateString = date.toISOString().split('T')[0];
+          const dayOfWeek = date.toLocaleDateString('en-US', { weekday: 'short' });
+          
+          if (!acc.find(d => d.date === dateString)) {
+            acc.push({
+              date: dateString,
+              day: dateString === new Date().toISOString().split('T')[0] ? 'Today' : dayOfWeek,
+              high: Math.round(item.main.temp_max),
+              low: Math.round(item.main.temp_min),
+              condition: item.weather[0].main,
+              icon: getWeatherIcon(item.weather[0].id, item.weather[0].icon),
+              rainfall: item.rain ? Math.round(item.rain['3h'] || 0) : 0,
+              humidity: item.main.humidity
+            });
+          } else {
+            const existing = acc.find(d => d.date === dateString);
+            if (existing) {
+              existing.high = Math.max(existing.high, Math.round(item.main.temp_max));
+              existing.low = Math.min(existing.low, Math.round(item.main.temp_min));
+            }
+          }
+          return acc;
+        }, []).slice(0, 7); // Get next 7 days
+
+        // Set weather data
+        setWeatherData({
+          current: currentWeather,
+          forecast: dailyForecast,
+          alerts: [], // OpenWeatherMap doesn't provide alerts in free tier
+          location: `${currentData.name}, ${currentData.sys.country}`
+        });
+        
         setLoading(false);
         setLastUpdated(new Date());
-      }, 1000);
+      } catch (error) {
+        console.error('Error fetching weather data:', error);
+        setError('Failed to fetch weather data. Please try again later.');
+        setLoading(false);
+      }
     };
 
     fetchWeatherData();
@@ -118,9 +253,38 @@ const WeatherForecast: React.FC<{ onBack: () => void }> = ({ onBack }) => {
     // Update every 10 minutes
     const interval = setInterval(fetchWeatherData, 600000);
     return () => clearInterval(interval);
-  }, []);
+  }, [farmerProfile]);
 
-  if (loading || !weatherData) {
+  if (loading && !weatherData) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-sky-50 to-blue-50 flex items-center justify-center">
+        <div className="text-center">
+          <RefreshCw className="h-8 w-8 text-blue-500 animate-spin mx-auto mb-4" />
+          <p className="text-gray-600">Loading weather data...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-sky-50 to-blue-50 flex items-center justify-center">
+        <div className="text-center p-6 bg-white rounded-lg shadow-md max-w-md">
+          <AlertTriangle className="h-12 w-12 text-yellow-500 mx-auto mb-4" />
+          <h2 className="text-xl font-semibold text-gray-800 mb-2">Weather Data Unavailable</h2>
+          <p className="text-gray-600 mb-4">{error}</p>
+          <button
+            onClick={() => window.location.reload()}
+            className="px-4 py-2 bg-blue-500 text-white rounded-md hover:bg-blue-600 transition-colors"
+          >
+            Try Again
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  if (!weatherData) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-sky-50 to-blue-50 flex items-center justify-center">
         <div className="text-center">
@@ -139,7 +303,7 @@ const WeatherForecast: React.FC<{ onBack: () => void }> = ({ onBack }) => {
           <div className="flex items-center justify-between">
             <div className="flex items-center space-x-4">
               <button
-                onClick={onBack}
+                onClick={() => onBack ? onBack() : navigate('/')}
                 className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
               >
                 <ArrowLeft className="h-5 w-5 text-gray-600" />

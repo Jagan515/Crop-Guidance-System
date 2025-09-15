@@ -1,258 +1,234 @@
 import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { 
   ArrowLeft, 
-  TrendingUp, 
+  TrendingUp,
   TrendingDown,
-  MapPin,
   DollarSign,
   BarChart3,
-  LineChart,
-  RefreshCw,
-  Filter,
-  ChevronDown,
-  ArrowUp,
-  ArrowDown,
-  Store,
   Calendar,
-  Target,
-  Award,
+  MapPin,
+  RefreshCw,
   AlertCircle
 } from 'lucide-react';
+import { fetchMarketData, MarketData as APIMarketData } from '../services/marketService';
 import Footer from './Footer';
 
-interface MarketData {
-  id: string;
-  crop: string;
-  currentPrice: number;
-  previousPrice: number;
-  priceChange: number;
-  priceChangePercent: number;
-  demand: 'low' | 'medium' | 'high';
+interface MarketInsightsProps {
+  onBack?: () => void;
+}
+
+interface UserLocation {
+  latitude: number;
+  longitude: number;
+  accuracy?: number;
+  error?: string;
+}
+
+interface FilterState {
+  state: string;
+  district: string;
   market: string;
-  region: string;
-  lastUpdated: string;
-  volume: number;
-  season: string;
+  commodity: string;
+  limit: number;
+  offset: number;
+  searchQuery: string;
+  useLocation: boolean;
 }
 
-interface PriceTrend {
-  month: string;
-  price: number;
-  volume: number;
-}
+const DEFAULT_FILTERS: FilterState = {
+  state: '',
+  district: '',
+  market: '',
+  commodity: '',
+  limit: 20,
+  offset: 0,
+  searchQuery: '',
+  useLocation: false
+};
 
-interface TopCrop {
-  id: string;
-  name: string;
-  demand: 'low' | 'medium' | 'high';
-  price: number;
-  priceChange: number;
-  market: string;
-  profitPotential: 'low' | 'medium' | 'high';
-  season: string;
-}
-
-const MarketInsights: React.FC<{ onBack: () => void }> = ({ onBack }) => {
-  const [marketData, setMarketData] = useState<MarketData[]>([]);
-  const [topCrops, setTopCrops] = useState<TopCrop[]>([]);
-  const [priceTrends, setPriceTrends] = useState<PriceTrend[]>([]);
-  const [loading, setLoading] = useState(false);
-  const [selectedCrop, setSelectedCrop] = useState<string>('all');
-  const [selectedMarket, setSelectedMarket] = useState<string>('all');
-  const [chartType, setChartType] = useState<'bar' | 'line'>('bar');
+const MarketInsights: React.FC<MarketInsightsProps> = ({ onBack }) => {
+  const navigate = useNavigate();
+  const [marketData, setMarketData] = useState<APIMarketData[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [filters, setFilters] = useState<FilterState>(DEFAULT_FILTERS);
   const [showFilters, setShowFilters] = useState(false);
-
-  // Mock data for demonstration
-  const mockMarketData: MarketData[] = [
-    {
-      id: '1',
-      crop: 'Rice',
-      currentPrice: 2800,
-      previousPrice: 2650,
-      priceChange: 150,
-      priceChangePercent: 5.66,
-      demand: 'high',
-      market: 'Delhi Mandi',
-      region: 'North India',
-      lastUpdated: '2024-01-15',
-      volume: 1250,
-      season: 'kharif'
-    },
-    {
-      id: '2',
-      crop: 'Wheat',
-      currentPrice: 2200,
-      previousPrice: 2300,
-      priceChange: -100,
-      priceChangePercent: -4.35,
-      demand: 'high',
-      market: 'Punjab Mandi',
-      region: 'North India',
-      lastUpdated: '2024-01-15',
-      volume: 980,
-      season: 'rabi'
-    },
-    {
-      id: '3',
-      crop: 'Maize',
-      currentPrice: 1950,
-      previousPrice: 1800,
-      priceChange: 150,
-      priceChangePercent: 8.33,
-      demand: 'medium',
-      market: 'Karnataka Mandi',
-      region: 'South India',
-      lastUpdated: '2024-01-15',
-      volume: 750,
-      season: 'kharif'
-    },
-    {
-      id: '4',
-      crop: 'Cotton',
-      currentPrice: 6500,
-      previousPrice: 6200,
-      priceChange: 300,
-      priceChangePercent: 4.84,
-      demand: 'high',
-      market: 'Gujarat Mandi',
-      region: 'West India',
-      lastUpdated: '2024-01-15',
-      volume: 450,
-      season: 'kharif'
-    },
-    {
-      id: '5',
-      crop: 'Sugarcane',
-      currentPrice: 320,
-      previousPrice: 315,
-      priceChange: 5,
-      priceChangePercent: 1.59,
-      demand: 'medium',
-      market: 'Maharashtra Mandi',
-      region: 'West India',
-      lastUpdated: '2024-01-15',
-      volume: 2100,
-      season: 'year-round'
-    },
-    {
-      id: '6',
-      crop: 'Tomato',
-      currentPrice: 45,
-      previousPrice: 35,
-      priceChange: 10,
-      priceChangePercent: 28.57,
-      demand: 'high',
-      market: 'Bangalore Mandi',
-      region: 'South India',
-      lastUpdated: '2024-01-15',
-      volume: 320,
-      season: 'rabi'
+  const [userLocation, setUserLocation] = useState<UserLocation | null>(null);
+  const [isLocating, setIsLocating] = useState(false);
+  
+  // Available filter options
+  const [states, setStates] = useState<string[]>([]);
+  const [districts, setDistricts] = useState<string[]>([]);
+  const [markets, setMarkets] = useState<string[]>([]);
+  const [commodities, setCommodities] = useState<string[]>([]);
+  
+  // Get user's current location
+  const getUserLocation = () => {
+    if (!navigator.geolocation) {
+      setError('Geolocation is not supported by your browser');
+      return;
     }
-  ];
 
-  const mockTopCrops: TopCrop[] = [
-    {
-      id: '1',
-      name: 'Tomato',
-      demand: 'high',
-      price: 45,
-      priceChange: 28.57,
-      market: 'Bangalore Mandi',
-      profitPotential: 'high',
-      season: 'rabi'
-    },
-    {
-      id: '2',
-      name: 'Maize',
-      demand: 'medium',
-      price: 1950,
-      priceChange: 8.33,
-      market: 'Karnataka Mandi',
-      profitPotential: 'high',
-      season: 'kharif'
-    },
-    {
-      id: '3',
-      name: 'Cotton',
-      demand: 'high',
-      price: 6500,
-      priceChange: 4.84,
-      market: 'Gujarat Mandi',
-      profitPotential: 'high',
-      season: 'kharif'
-    },
-    {
-      id: '4',
-      name: 'Rice',
-      demand: 'high',
-      price: 2800,
-      priceChange: 5.66,
-      market: 'Delhi Mandi',
-      profitPotential: 'medium',
-      season: 'kharif'
-    },
-    {
-      id: '5',
-      name: 'Sugarcane',
-      demand: 'medium',
-      price: 320,
-      priceChange: 1.59,
-      market: 'Maharashtra Mandi',
-      profitPotential: 'medium',
-      season: 'year-round'
-    }
-  ];
-
-  const mockPriceTrends: PriceTrend[] = [
-    { month: 'Jul', price: 2500, volume: 1200 },
-    { month: 'Aug', price: 2600, volume: 1350 },
-    { month: 'Sep', price: 2700, volume: 1100 },
-    { month: 'Oct', price: 2750, volume: 1400 },
-    { month: 'Nov', price: 2650, volume: 1300 },
-    { month: 'Dec', price: 2800, volume: 1250 }
-  ];
+    setIsLocating(true);
+    navigator.geolocation.getCurrentPosition(
+      (position) => {
+        setUserLocation({
+          latitude: position.coords.latitude,
+          longitude: position.coords.longitude,
+          accuracy: position.coords.accuracy
+        });
+        setFilters(prev => ({
+          ...prev,
+          useLocation: true
+        }));
+        setIsLocating(false);
+      },
+      (error) => {
+        setError(`Unable to retrieve your location: ${error.message}`);
+        setIsLocating(false);
+      },
+      {
+        enableHighAccuracy: true,
+        timeout: 10000,
+        maximumAge: 0
+      }
+    );
+  };
 
   useEffect(() => {
-    fetchMarketData();
-  }, []);
+    const fetchData = async () => {
+      try {
+        setLoading(true);
+        setError(null);
+        
+        // Prepare API filters
+        const apiFilters: any = {
+          ...filters,
+          state: filters.state || undefined,
+          district: filters.district || undefined,
+          market: filters.market || undefined,
+          commodity: filters.commodity || undefined,
+          searchQuery: filters.searchQuery || undefined,
+        };
+        
+        // Add location filter if enabled
+        if (filters.useLocation && userLocation) {
+          apiFilters.location = {
+            latitude: userLocation.latitude,
+            longitude: userLocation.longitude,
+            radiusKm: 50 // Default 50km radius
+          };
+        }
+        
+        const data = await fetchMarketData(apiFilters);
+        setMarketData(data);
+        
+        // Update available filter options
+        updateFilterOptions(data);
+        
+      } catch (err) {
+        console.error('Error fetching market data:', err);
+        setError('Failed to load market data. Please try again.');
+      } finally {
+        setLoading(false);
+      }
+    };
 
-  const fetchMarketData = async () => {
-    setLoading(true);
-    // Simulate API call
-    setTimeout(() => {
-      setMarketData(mockMarketData);
-      setTopCrops(mockTopCrops);
-      setPriceTrends(mockPriceTrends);
-      setLoading(false);
-    }, 1000);
+    fetchData();
+  }, [filters, userLocation]);
+  
+  // Update available filter options based on current data
+  const updateFilterOptions = (data: APIMarketData[]) => {
+    const uniqueStates = Array.from(new Set(data.map(item => item.state))).filter(Boolean).sort();
+    const uniqueDistricts = Array.from(new Set(data.map(item => item.district))).filter(Boolean).sort();
+    const uniqueMarkets = Array.from(new Set(data.map(item => item.market))).filter(Boolean).sort();
+    const uniqueCommodities = Array.from(new Set(data.map(item => item.commodity))).filter(Boolean).sort();
+    
+    setStates(uniqueStates);
+    setDistricts(uniqueDistricts);
+    setMarkets(uniqueMarkets);
+    setCommodities(uniqueCommodities);
+  };
+  
+  // Handle filter changes
+  const handleFilterChange = (key: keyof FilterState, value: string | number) => {
+    setFilters(prev => {
+      const newFilters = {
+        ...prev,
+        [key]: value,
+        // Reset dependent filters when parent changes
+        ...(key === 'state' && { district: '', market: '' }),
+        ...(key === 'district' && { market: '' })
+      };
+      
+      // Reset offset when filters change
+      if (key !== 'offset') {
+        newFilters.offset = 0;
+      }
+      
+      return newFilters;
+    });
+  };
+  
+  // Handle filter changes
+  const handleSearchChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setFilters(prev => ({
+      ...prev,
+      searchQuery: e.target.value,
+      offset: 0 // Reset to first page when searching
+    }));
   };
 
-  const getDemandColor = (demand: string) => {
-    switch (demand) {
-      case 'high': return 'text-green-600 bg-green-100';
-      case 'medium': return 'text-yellow-600 bg-yellow-100';
-      case 'low': return 'text-red-600 bg-red-100';
-      default: return 'text-gray-600 bg-gray-100';
+  // Toggle location-based filtering
+  const toggleLocationFilter = () => {
+    if (!filters.useLocation && !userLocation) {
+      getUserLocation();
+    } else {
+      setFilters(prev => ({
+        ...prev,
+        useLocation: !prev.useLocation
+      }));
     }
   };
 
-  const getProfitPotentialColor = (potential: string) => {
-    switch (potential) {
-      case 'high': return 'text-green-600 bg-green-100';
-      case 'medium': return 'text-yellow-600 bg-yellow-100';
-      case 'low': return 'text-red-600 bg-red-100';
-      default: return 'text-gray-600 bg-gray-100';
-    }
+  // Refresh data
+  const refreshData = () => {
+    setFilters(prev => ({
+      ...prev,
+      offset: 0
+    }));
   };
 
-  const filteredMarketData = marketData.filter(item => {
-    if (selectedCrop !== 'all' && item.crop.toLowerCase() !== selectedCrop.toLowerCase()) return false;
-    if (selectedMarket !== 'all' && item.market !== selectedMarket) return false;
-    return true;
-  });
-
-  const uniqueMarkets = [...new Set(marketData.map(item => item.market))];
-  const uniqueCrops = [...new Set(marketData.map(item => item.crop))];
+  if (loading && marketData.length === 0) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <div className="text-center">
+          <Loader2 className="h-8 w-8 text-green-600 animate-spin mx-auto mb-4" />
+          <p className="text-gray-600">Loading market data...</p>
+        </div>
+      </div>
+    );
+  }
+  
+  if (error) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <div className="text-center p-6 bg-white rounded-lg shadow-md max-w-md">
+          <AlertTriangle className="h-12 w-12 text-red-500 mx-auto mb-4" />
+          <h2 className="text-xl font-semibold text-gray-800 mb-2">Error Loading Data</h2>
+          <p className="text-gray-600 mb-4">{error}</p>
+          <button
+            onClick={refreshData}
+            className="px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 transition-colors flex items-center mx-auto"
+          >
+            <RefreshCw className="h-4 w-4 mr-2" />
+            Try Again
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-green-50 to-emerald-50">
@@ -262,7 +238,7 @@ const MarketInsights: React.FC<{ onBack: () => void }> = ({ onBack }) => {
           <div className="flex items-center justify-between">
             <div className="flex items-center space-x-4">
               <button
-                onClick={onBack}
+                onClick={() => onBack ? onBack() : navigate('/')}
                 className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
               >
                 <ArrowLeft className="h-5 w-5 text-gray-600" />
@@ -274,7 +250,7 @@ const MarketInsights: React.FC<{ onBack: () => void }> = ({ onBack }) => {
             </div>
             
             <button
-              onClick={fetchMarketData}
+              onClick={refreshData}
               disabled={loading}
               className="flex items-center space-x-2 bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg transition-colors disabled:opacity-50"
             >
@@ -286,11 +262,50 @@ const MarketInsights: React.FC<{ onBack: () => void }> = ({ onBack }) => {
       </div>
 
       <div className="max-w-6xl mx-auto px-4 py-8">
+        {/* Search and Location Bar */}
+        <div className="bg-white rounded-xl shadow-sm border border-gray-100 mb-6 p-4">
+          <div className="flex flex-col md:flex-row gap-4">
+            <div className="flex-1 relative">
+              <input
+                type="text"
+                placeholder="Search by market, commodity, or location..."
+                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                value={filters.searchQuery}
+                onChange={handleSearchChange}
+              />
+              {filters.searchQuery && (
+                <button
+                  onClick={() => setFilters(prev => ({ ...prev, searchQuery: '' }))}
+                  className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                >
+                  ✕
+                </button>
+              )}
+            </div>
+            <button
+              onClick={toggleLocationFilter}
+              disabled={isLocating}
+              className={`flex items-center justify-center px-4 py-2 rounded-lg transition-colors ${
+                filters.useLocation 
+                  ? 'bg-green-600 text-white hover:bg-green-700' 
+                  : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+              }`}
+            >
+              {isLocating ? (
+                <Loader2 className="h-4 w-4 animate-spin mr-2" />
+              ) : (
+                <MapPin className="h-4 w-4 mr-2" />
+              )}
+              {filters.useLocation ? 'Near Me' : 'Use My Location'}
+            </button>
+          </div>
+        </div>
+
         {/* Filters */}
         <div className="bg-white rounded-xl shadow-sm border border-gray-100 mb-6">
           <div className="p-4">
             <div className="flex items-center justify-between mb-4">
-              <h3 className="font-semibold text-gray-900">Market Filters</h3>
+              <h3 className="font-semibold text-gray-900">Advanced Filters</h3>
               <button
                 onClick={() => setShowFilters(!showFilters)}
                 className="flex items-center space-x-2 text-green-600 hover:text-green-700"
@@ -304,15 +319,29 @@ const MarketInsights: React.FC<{ onBack: () => void }> = ({ onBack }) => {
             {showFilters && (
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">Crop</label>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">State</label>
                   <select
-                    value={selectedCrop}
-                    onChange={(e) => setSelectedCrop(e.target.value)}
+                    value={filters.state}
+                    onChange={(e) => handleFilterChange('state', e.target.value)}
                     className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500"
                   >
-                    <option value="all">All Crops</option>
-                    {uniqueCrops.map(crop => (
-                      <option key={crop} value={crop}>{crop}</option>
+                    <option value="">All States</option>
+                    {states.map(state => (
+                      <option key={state} value={state}>{state}</option>
+                    ))}
+                  </select>
+                </div>
+                
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">District</label>
+                  <select
+                    value={filters.district}
+                    onChange={(e) => handleFilterChange('district', e.target.value)}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500"
+                  >
+                    <option value="">All Districts</option>
+                    {districts.map(district => (
+                      <option key={district} value={district}>{district}</option>
                     ))}
                   </select>
                 </div>
@@ -320,204 +349,58 @@ const MarketInsights: React.FC<{ onBack: () => void }> = ({ onBack }) => {
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">Market</label>
                   <select
-                    value={selectedMarket}
-                    onChange={(e) => setSelectedMarket(e.target.value)}
+                    value={filters.market}
+                    onChange={(e) => handleFilterChange('market', e.target.value)}
                     className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500"
                   >
-                    <option value="all">All Markets</option>
-                    {uniqueMarkets.map(market => (
+                    <option value="">All Markets</option>
+                    {markets.map(market => (
                       <option key={market} value={market}>{market}</option>
                     ))}
                   </select>
                 </div>
                 
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">Chart Type</label>
-                  <div className="flex space-x-2">
-                    <button
-                      onClick={() => setChartType('bar')}
-                      className={`flex items-center space-x-2 px-3 py-2 rounded-lg transition-colors ${
-                        chartType === 'bar' ? 'bg-green-600 text-white' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                      }`}
-                    >
-                      <BarChart3 className="h-4 w-4" />
-                      <span>Bar</span>
-                    </button>
-                    <button
-                      onClick={() => setChartType('line')}
-                      className={`flex items-center space-x-2 px-3 py-2 rounded-lg transition-colors ${
-                        chartType === 'line' ? 'bg-green-600 text-white' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                      }`}
-                    >
-                      <LineChart className="h-4 w-4" />
-                      <span>Line</span>
-                    </button>
-                  </div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Commodity</label>
+                  <select
+                    value={filters.commodity}
+                    onChange={(e) => handleFilterChange('commodity', e.target.value)}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500"
+                  >
+                    <option value="">All Commodities</option>
+                    {commodities.map(commodity => (
+                      <option key={commodity} value={commodity}>{commodity}</option>
+                    ))}
+                  </select>
                 </div>
               </div>
             )}
-          </div>
-        </div>
-
-        {/* Price Trends Chart */}
-        <div className="bg-white rounded-xl shadow-lg border border-gray-100 mb-6 overflow-hidden">
-          <div className="bg-gradient-to-r from-green-500 to-emerald-500 px-6 py-4">
-            <div className="flex items-center justify-between">
-              <div>
-                <h3 className="text-lg font-semibold text-white">Price Trends</h3>
-                <p className="text-green-100 text-sm">Last 6 months market performance</p>
-              </div>
-              <div className="flex items-center space-x-2 text-green-100">
-                <Calendar className="h-4 w-4" />
-                <span className="text-sm">Updated: {new Date().toLocaleDateString()}</span>
-              </div>
-            </div>
-          </div>
-          
-          <div className="p-6">
-            {chartType === 'bar' ? (
-              <div className="space-y-4">
-                <div className="flex items-center justify-between text-sm text-gray-600 mb-4">
-                  <span>Price per quintal (₹)</span>
-                  <span>Volume (tonnes)</span>
-                </div>
-                <div className="space-y-3">
-                  {priceTrends.map((trend, index) => (
-                    <div key={index} className="flex items-center space-x-4">
-                      <div className="w-12 text-sm text-gray-600">{trend.month}</div>
-                      <div className="flex-1">
-                        <div className="flex items-center space-x-2">
-                          <div className="flex-1 bg-gray-200 rounded-full h-6 relative">
-                            <div 
-                              className="bg-green-500 h-6 rounded-full flex items-center justify-end pr-2"
-                              style={{ width: `${(trend.price / 3000) * 100}%` }}
-                            >
-                              <span className="text-white text-xs font-medium">₹{trend.price}</span>
-                            </div>
-                          </div>
-                          <div className="w-16 text-xs text-gray-500 text-right">{trend.volume}</div>
-                        </div>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            ) : (
-              <div className="space-y-4">
-                <div className="flex items-center justify-between text-sm text-gray-600 mb-4">
-                  <span>Price per quintal (₹)</span>
-                  <span>Volume (tonnes)</span>
-                </div>
-                <div className="space-y-3">
-                  {priceTrends.map((trend, index) => (
-                    <div key={index} className="flex items-center space-x-4">
-                      <div className="w-12 text-sm text-gray-600">{trend.month}</div>
-                      <div className="flex-1">
-                        <div className="flex items-center space-x-2">
-                          <div className="flex-1 bg-gray-200 rounded-full h-6 relative">
-                            <div 
-                              className="bg-gradient-to-r from-green-400 to-green-600 h-6 rounded-full flex items-center justify-end pr-2"
-                              style={{ width: `${(trend.price / 3000) * 100}%` }}
-                            >
-                              <span className="text-white text-xs font-medium">₹{trend.price}</span>
-                            </div>
-                          </div>
-                          <div className="w-16 text-xs text-gray-500 text-right">{trend.volume}</div>
-                        </div>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-          </div>
-        </div>
-
-        {/* Top Crops with Highest Demand */}
-        <div className="bg-white rounded-xl shadow-lg border border-gray-100 mb-6 overflow-hidden">
-          <div className="bg-gradient-to-r from-purple-500 to-violet-500 px-6 py-4">
-            <div className="flex items-center justify-between">
-              <div>
-                <h3 className="text-lg font-semibold text-white">Top Crops by Demand</h3>
-                <p className="text-purple-100 text-sm">Most profitable crops in current market</p>
-              </div>
-              <div className="flex items-center space-x-2 text-purple-100">
-                <Target className="h-4 w-4" />
-                <span className="text-sm">High Profit Potential</span>
-              </div>
-            </div>
-          </div>
-          
-          <div className="p-6">
-            <div className="space-y-4">
-              {topCrops.map((crop, index) => (
-                <div key={crop.id} className="flex items-center justify-between p-4 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors">
-                  <div className="flex items-center space-x-4">
-                    <div className="flex items-center justify-center w-8 h-8 bg-green-100 rounded-full">
-                      <span className="text-green-600 font-bold text-sm">#{index + 1}</span>
-                    </div>
-                    <div>
-                      <h4 className="font-semibold text-gray-900">{crop.name}</h4>
-                      <div className="flex items-center space-x-2 mt-1">
-                        <MapPin className="h-3 w-3 text-gray-400" />
-                        <span className="text-sm text-gray-600">{crop.market}</span>
-                        <span className="text-xs text-gray-400">•</span>
-                        <span className="text-xs text-gray-500 capitalize">{crop.season}</span>
-                      </div>
-                    </div>
-                  </div>
-                  
-                  <div className="flex items-center space-x-4">
-                    <div className="text-right">
-                      <div className="flex items-center space-x-2">
-                        <DollarSign className="h-4 w-4 text-green-600" />
-                        <span className="font-semibold text-gray-900">₹{crop.price}/q</span>
-                      </div>
-                      <div className="flex items-center space-x-1 mt-1">
-                        {crop.priceChange > 0 ? (
-                          <ArrowUp className="h-3 w-3 text-green-500" />
-                        ) : (
-                          <ArrowDown className="h-3 w-3 text-red-500" />
-                        )}
-                        <span className={`text-xs font-medium ${crop.priceChange > 0 ? 'text-green-600' : 'text-red-600'}`}>
-                          {crop.priceChange > 0 ? '+' : ''}{crop.priceChange}%
-                        </span>
-                      </div>
-                    </div>
-                    
-                    <div className="flex flex-col space-y-1">
-                      <div className={`px-2 py-1 rounded-full text-xs font-medium ${getDemandColor(crop.demand)}`}>
-                        {crop.demand} demand
-                      </div>
-                      <div className={`px-2 py-1 rounded-full text-xs font-medium ${getProfitPotentialColor(crop.profitPotential)}`}>
-                        {crop.profitPotential} profit
-                      </div>
-                    </div>
-                    
-                    {crop.profitPotential === 'high' && (
-                      <div className="flex items-center space-x-1 text-green-600">
-                        <TrendingUp className="h-4 w-4" />
-                        <span className="text-xs font-medium">Profitable</span>
-                      </div>
-                    )}
-                  </div>
-                </div>
-              ))}
-            </div>
           </div>
         </div>
 
         {/* Market Data Table */}
         <div className="bg-white rounded-xl shadow-lg border border-gray-100 overflow-hidden">
           <div className="bg-gradient-to-r from-blue-500 to-cyan-500 px-6 py-4">
-            <div className="flex items-center justify-between">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
               <div>
-                <h3 className="text-lg font-semibold text-white">Current Market Prices</h3>
-                <p className="text-blue-100 text-sm">Live prices from major markets across India</p>
+                <h3 className="text-lg font-semibold text-white">
+                  {filters.useLocation && userLocation ? 'Markets Near You' : 'Current Market Prices'}
+                </h3>
+                <p className="text-blue-100 text-sm">
+                  {filters.useLocation && userLocation 
+                    ? `Within 50km of your location (${userLocation.latitude.toFixed(4)}, ${userLocation.longitude.toFixed(4)})`
+                    : 'Live prices from major markets across India'}
+                </p>
               </div>
               <div className="flex items-center space-x-2 text-blue-100">
+                {filters.useLocation && !userLocation && (
+                  <span className="text-yellow-200 text-sm">
+                    <Loader2 className="inline h-3 w-3 animate-spin mr-1" />
+                    Detecting location...
+                  </span>
+                )}
                 <Store className="h-4 w-4" />
-                <span className="text-sm">{filteredMarketData.length} Markets</span>
+                <span className="text-sm">{marketData.length} {marketData.length === 1 ? 'Market' : 'Markets'}</span>
               </div>
             </div>
           </div>
@@ -526,82 +409,29 @@ const MarketInsights: React.FC<{ onBack: () => void }> = ({ onBack }) => {
             <table className="w-full">
               <thead className="bg-gray-50">
                 <tr>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Crop</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">State</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">District</th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Market</th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Current Price</th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Change</th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Demand</th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Volume</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Crop</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Price (₹/q)</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Date</th>
                 </tr>
               </thead>
               <tbody className="bg-white divide-y divide-gray-200">
-                {filteredMarketData.map((item) => (
+                {marketData.map((item) => (
                   <tr key={item.id} className="hover:bg-gray-50">
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <div className="flex items-center">
-                        <div className="flex-shrink-0 h-8 w-8">
-                          <div className="h-8 w-8 rounded-full bg-green-100 flex items-center justify-center">
-                            <span className="text-green-600 font-bold text-sm">{item.crop.charAt(0)}</span>
-                          </div>
-                        </div>
-                        <div className="ml-4">
-                          <div className="text-sm font-medium text-gray-900">{item.crop}</div>
-                          <div className="text-sm text-gray-500 capitalize">{item.season}</div>
-                        </div>
-                      </div>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <div className="flex items-center">
-                        <MapPin className="h-4 w-4 text-gray-400 mr-2" />
-                        <div>
-                          <div className="text-sm text-gray-900">{item.market}</div>
-                          <div className="text-sm text-gray-500">{item.region}</div>
-                        </div>
-                      </div>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <div className="flex items-center">
-                        <DollarSign className="h-4 w-4 text-green-600 mr-2" />
-                        <span className="text-sm font-medium text-gray-900">₹{item.currentPrice}/q</span>
-                      </div>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <div className="flex items-center space-x-1">
-                        {item.priceChange > 0 ? (
-                          <ArrowUp className="h-4 w-4 text-green-500" />
-                        ) : (
-                          <ArrowDown className="h-4 w-4 text-red-500" />
-                        )}
-                        <span className={`text-sm font-medium ${item.priceChange > 0 ? 'text-green-600' : 'text-red-600'}`}>
-                          {item.priceChange > 0 ? '+' : ''}₹{item.priceChange}
-                        </span>
-                        <span className={`text-xs ${item.priceChange > 0 ? 'text-green-600' : 'text-red-600'}`}>
-                          ({item.priceChangePercent > 0 ? '+' : ''}{item.priceChangePercent}%)
-                        </span>
-                      </div>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <span className={`px-2 py-1 rounded-full text-xs font-medium ${getDemandColor(item.demand)}`}>
-                        {item.demand}
-                      </span>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                      {item.volume} tonnes
-                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap">{item.state || '-'}</td>
+                    <td className="px-6 py-4 whitespace-nowrap">{item.district || '-'}</td>
+                    <td className="px-6 py-4 whitespace-nowrap">{item.market || '-'}</td>
+                    <td className="px-6 py-4 whitespace-nowrap">{item.commodity || '-'}</td>
+                    <td className="px-6 py-4 whitespace-nowrap">₹{item.modal_price?.toLocaleString() || 'N/A'}</td>
+                    <td className="px-6 py-4 whitespace-nowrap">{item.arrival_date || '-'}</td>
                   </tr>
                 ))}
               </tbody>
             </table>
           </div>
         </div>
-
-        {/* Loading State */}
-        {loading && (
-          <div className="text-center py-12">
-            <RefreshCw className="h-8 w-8 text-green-500 animate-spin mx-auto mb-4" />
-            <p className="text-gray-600">Loading market data...</p>
-          </div>
-        )}
       </div>
       <Footer />
     </div>

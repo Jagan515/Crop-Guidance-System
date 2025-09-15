@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
-import { useAuth } from '../../backend/contexts/AuthContext';
+import { useAuth } from '../contexts/AuthContext';
+import { Link, useNavigate } from 'react-router-dom';
 import { 
   Mail, 
   Lock, 
@@ -11,10 +12,11 @@ import {
 } from 'lucide-react';
 
 interface LoginProps {
-  onSwitchToSignup: () => void;
+  onSwitchToSignup?: () => void;  // Make it optional with ?
 }
 
 const Login: React.FC<LoginProps> = ({ onSwitchToSignup }) => {
+  const navigate = useNavigate();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
@@ -22,6 +24,9 @@ const Login: React.FC<LoginProps> = ({ onSwitchToSignup }) => {
   const [error, setError] = useState('');
 
   const { login, loginWithGoogle } = useAuth();
+
+  // Default navigation function if onSwitchToSignup is not provided
+  const handleSwitchToSignup = onSwitchToSignup || (() => navigate('/signup'));
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -54,6 +59,15 @@ const Login: React.FC<LoginProps> = ({ onSwitchToSignup }) => {
     } finally {
       setLoading(false);
     }
+  };
+
+  // Debug log to check if the component renders
+  console.log('Login component rendered, onSwitchToSignup:', onSwitchToSignup);
+  
+  const handleSignupClick = (e: React.MouseEvent) => {
+    e.preventDefault();
+    console.log('Navigating to /signup');
+    navigate('/signup');
   };
 
   return (
@@ -143,7 +157,7 @@ const Login: React.FC<LoginProps> = ({ onSwitchToSignup }) => {
           <div className="flex-1 border-t border-gray-300"></div>
         </div>
 
-        {/* Google Sign In */}
+        {/* Google Sign In
         <button
           onClick={handleGoogleSignIn}
           disabled={loading}
@@ -156,17 +170,17 @@ const Login: React.FC<LoginProps> = ({ onSwitchToSignup }) => {
             <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/>
           </svg>
           <span>Continue with Google</span>
-        </button>
+        </button> */}
 
         {/* Sign Up Link */}
         <p className="text-center mt-6 text-gray-600">
           Don't have an account?{' '}
-          <button
-            onClick={onSwitchToSignup}
+          <Link 
+            to="/signup" 
             className="text-green-600 hover:text-green-700 font-medium"
           >
             Sign up here
-          </button>
+          </Link>
         </p>
       </div>
     </div>
