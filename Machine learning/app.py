@@ -39,7 +39,7 @@ def home():
 def api_predict():
     try:
         if USE_MOCK:
-            return jsonify({"error": "Models not found. Please train and save models first."}), 500
+            return jsonify({"error": "Models not found. Please train and save models."}), 500
 
         data = request.get_json(force=True)
 
