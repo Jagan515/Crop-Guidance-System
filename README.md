@@ -10,11 +10,6 @@ A comprehensive farming application with AI-powered crop recommendations, market
 - **Weather Forecast** - Local weather predictions and alerts
 - **Image Upload** - Disease detection from crop images
 
-## 🏗️ Architecture
-
-```
-
-```
 
 ## 🚀 Quick Start
 
